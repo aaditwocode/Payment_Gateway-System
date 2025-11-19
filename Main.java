@@ -1,131 +1,164 @@
+
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
-// core DTOs
-class Money {
+class Money
+{
     private final long amount; // in paise
     private final String currency;
 
-    public Money(long amount, String currency) {
+    public Money(long amount, String currency)
+    {
         this.amount = amount;
         this.currency = currency;
     }
 
-    public long getAmount() {
+    public long getAmount()
+    {
         return amount;
     }
 
-    public String getCurrency() {
+    public String getCurrency()
+    {
         return currency;
     }
 
-    public Money add(Money m) {
+    public Money add(Money m) throws Exception
+    {
         if (!m.currency.equals(this.currency))
-            throw new IllegalArgumentException("curr mismatch");
+        {
+            throw new Exception("curr mismatch");
+        }
         return new Money(this.amount + m.amount, currency);
     }
 
-    public Money sub(Money m) {
+    public Money sub(Money m) throws Exception
+    {
         if (!m.currency.equals(this.currency))
-            throw new IllegalArgumentException("curr mismatch");
+        {
+            throw new Exception("curr mismatch");
+        }
         return new Money(this.amount - m.amount, currency);
     }
 
     @Override
-    public String toString() {
+    public String toString()
+    {
         return String.format("%s %.2f", currency, amount / 100.0);
     }
 }
 
-class Payer {
+class Payer
+{
     private final String id;
     private final String name;
 
-    public Payer(String id, String name) {
+    public Payer(String id, String name)
+    {
         this.id = id;
         this.name = name;
     }
 
-    public String getId() {
+    public String getId()
+    {
         return id;
     }
 
-    public String getName() {
+    public String getName()
+    {
         return name;
     }
 }
 
-class PayReq {
+class PayReq
+{
     private final Payer payer;
     private final Money amt;
     private final Map<String, String> meta;
 
-    public PayReq(Payer p, Money amt, Map<String, String> meta) {
+    public PayReq(Payer p, Money amt, Map<String, String> meta)
+    {
         this.payer = p;
         this.amt = amt;
         this.meta = meta == null ? Collections.emptyMap() : new HashMap<>(meta);
     }
 
-    public Payer getPayer() {
+    public Payer getPayer()
+    {
         return payer;
     }
 
-    public Money getAmt() {
+    public Money getAmt()
+    {
         return amt;
     }
 
-    public Map<String, String> getMeta() {
+    public Map<String, String> getMeta()
+    {
         return meta;
     }
 }
 
-class PayResp {
+class PayResp
+{
     private final String txId;
     private final boolean ok;
     private final String msg;
 
-    public PayResp(String txId, boolean ok, String msg) {
+    public PayResp(String txId, boolean ok, String msg)
+    {
         this.txId = txId;
         this.ok = ok;
         this.msg = msg;
     }
 
-    public String getTxId() {
+    public String getTxId()
+    {
         return txId;
     }
 
-    public boolean isOk() {
+    public boolean isOk()
+    {
         return ok;
     }
 
-    public String getMsg() {
+    public String getMsg()
+    {
         return msg;
     }
 
     @Override
-    public String toString() {
+    public String toString()
+    {
         return "txId=" + txId + " ok=" + ok + " msg=" + msg;
     }
 }
 
-// Interfaces - SRP + ISP
-interface IPayment {
+interface IPayment
+{
     PayResp pay(PayReq req);
 }
 
-interface IRefund {
+interface IRefund
+{
     PayResp refund(String txId, Money amt);
 }
 
-interface ITransactionStore {
+interface ITransactionStore
+{
     void save(Transaction t);
 
-    Optional<Transaction> find(String txId);
+    Transaction find(String txId);
+
+    List<Transaction> getAll();
 }
 
 // Transaction entity
-class Transaction {
-    public enum Status {
+class Transaction
+{
+    public enum Status
+    {
         PENDING, SUCCESS, FAILED, REFUNDED
     }
 
@@ -137,7 +170,8 @@ class Transaction {
     private final Date ts;
     private Date updated;
 
-    public Transaction(String id, String method, Payer p, Money amt, Status st) {
+    public Transaction(String id, String method, Payer p, Money amt, Status st)
+    {
         this.id = id;
         this.method = method;
         this.payer = p;
@@ -147,555 +181,702 @@ class Transaction {
         this.updated = ts;
     }
 
-    public String getId() {
+    public String getId()
+    {
         return id;
     }
 
-    public String getMethod() {
+    public String getMethod()
+    {
         return method;
     }
 
-    public Payer getPayer() {
+    public Payer getPayer()
+    {
         return payer;
     }
 
-    public Money getAmt() {
+    public Money getAmt()
+    {
         return amt;
     }
 
-    public Status getStatus() {
+    public Status getStatus()
+    {
         return status;
     }
 
-    public void setStatus(Status s) {
+    public void setStatus(Status s)
+    {
         this.status = s;
         this.updated = new Date();
     }
 
     @Override
-    public String toString() {
-        return "Transaction{" +
-                "id='" + id + '\'' +
-                ", method='" + method + '\'' +
-                ", payer=" + payer.getName() +
-                ", amt=" + amt +
-                ", status=" + status +
-                ", ts=" + ts +
-                ", updated=" + updated +
-                '}';
+    public String toString()
+    {
+        return "Transaction{"
+                + "id='" + id + '\''
+                + ", method='" + method + '\''
+                + ", payer=" + payer.getName()
+                + ", amt=" + amt
+                + ", status=" + status
+                + ", ts=" + ts
+                + ", updated=" + updated
+                + '}';
+    }
+
+    public String toCsv()
+    {
+        return id + "," + method + "," + payer.getId() + "," + payer.getName() + "," + amt.getAmount() + "," + amt.getCurrency() + "," + status;
+    }
+
+    public static Transaction fromCsv(String csv)
+    {
+        String[] parts = csv.split(",");
+        if (parts.length != 7) throw new IllegalArgumentException("Invalid CSV");
+        return new Transaction(parts[0], parts[1], new Payer(parts[2], parts[3]), new Money(Long.parseLong(parts[4]), parts[5]), Transaction.Status.valueOf(parts[6]));
     }
 }
 
-// Simple in-memory store - Dependency Inversion (abstraction)
-class MemTxStore implements ITransactionStore {
+class MemTxStore implements ITransactionStore
+{
     private final Map<String, Transaction> map = new HashMap<>();
 
     @Override
-    public void save(Transaction t) {
+    public void save(Transaction t)
+    {
         map.put(t.getId(), t);
     }
 
     @Override
-    public Optional<Transaction> find(String txId) {
-        return Optional.ofNullable(map.get(txId));
-    }
-}
-
-// Logger / Observer - single responsibility
-interface ILogger {
-    void info(String s);
-
-    void err(String s);
-}
-
-class ConsoleLogger implements ILogger {
-    @Override
-    public void info(String s) {
-        System.out.println("[INFO] " + s);
+    public Transaction find(String txId)
+    {
+        return map.get(txId);
     }
 
     @Override
-    public void err(String s) {
-        System.err.println("[ERR] " + s);
+    public List<Transaction> getAll()
+    {
+        return new ArrayList<>(map.values());
+    }
+}
+
+class FileTxStore implements ITransactionStore
+{
+    private final Map<String, Transaction> map = new HashMap<>();
+    private final String filePath;
+
+    public FileTxStore(String filePath)
+    {
+        this.filePath = filePath;
+        loadFromFile();
+    }
+
+    private void loadFromFile()
+    {
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath)))
+        {
+            String line;
+            while ((line = br.readLine()) != null)
+            {
+                if (!line.trim().isEmpty())
+                {
+                    Transaction t = Transaction.fromCsv(line);
+                    map.put(t.getId(), t);
+                }
+            }
+        }
+        catch (IOException e)
+        {
+        }
+    }
+
+    @Override
+    public void save(Transaction t)
+    {
+        map.put(t.getId(), t);
+        appendToFile(t);
+    }
+
+    private void appendToFile(Transaction t)
+    {
+        try (FileWriter fw = new FileWriter(filePath, true))
+        {
+            fw.write(t.toCsv() + "\n");
+        }
+        catch (IOException e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public Transaction find(String txId)
+    {
+        return map.get(txId);
+    }
+
+    @Override
+    public List<Transaction> getAll()
+    {
+        return new ArrayList<>(map.values());
     }
 }
 
 // Unique id generator
-class IdGen {
+class IdGen
+{
     private final AtomicLong c = new AtomicLong(1000);
 
-    public String next(String prefix) {
+    public String next(String prefix)
+    {
         return prefix + c.getAndIncrement();
     }
 }
 
-// Validators
-interface IValidator<T> {
+interface IValidator<T>
+{
     void validate(T t) throws ValidationException;
 }
 
-class PayReqValidator implements IValidator<PayReq> {
+class PayReqValidator implements IValidator<PayReq>
+{
     @Override
-    public void validate(PayReq r) throws ValidationException {
+    public void validate(PayReq r) throws ValidationException
+    {
         if (r.getAmt() == null)
+        {
             throw new ValidationException("Amount is null");
+        }
         if (r.getAmt().getAmount() <= 0)
+        {
             throw new ValidationException("Amount must be positive");
+        }
         if (r.getPayer() == null)
+        {
             throw new ValidationException("Payer is null");
+        }
     }
 }
 
-// Payment methods implementations - Open/Closed: add new impl without changing
-// others
-class CardPayment implements IPayment, IRefund {
+class CardPayment implements IPayment, IRefund
+{
     private final ITransactionStore store;
-    private final ILogger log;
     private final IdGen idg;
 
-    public CardPayment(ITransactionStore s, ILogger l, IdGen idg) {
+    public CardPayment(ITransactionStore s, IdGen idg)
+    {
         this.store = s;
-        this.log = l;
         this.idg = idg;
     }
 
     @Override
-    public PayResp pay(PayReq req) {
+    public PayResp pay(PayReq req)
+    {
         String tx = idg.next("CARD-");
         Transaction t = new Transaction(tx, "CARD", req.getPayer(), req.getAmt(), Transaction.Status.PENDING);
         store.save(t);
-        boolean ok = simulateNetwork(req);
-        if (ok) {
+        boolean ok = true;
+        if (ok)
+        {
             t.setStatus(Transaction.Status.SUCCESS);
             store.save(t);
-            log.info("card pay ok " + tx);
             return new PayResp(tx, true, "card success");
-        } else {
+        }
+        else
+        {
             t.setStatus(Transaction.Status.FAILED);
             store.save(t);
-            log.err("card fail " + tx);
             return new PayResp(tx, false, "card failed");
         }
     }
 
     @Override
-    public PayResp refund(String txId, Money amt) {
-        Optional<Transaction> o = store.find(txId);
-        if (!o.isPresent())
+    public PayResp refund(String txId, Money amt)
+    {
+        Transaction t = store.find(txId);
+        if (t == null)
+        {
             return new PayResp("", false, "tx not found");
-        Transaction t = o.get();
-        if (!t.getMethod().equals("CARD"))
-            return new PayResp(txId, false, "method mismatch");
-        boolean ok = simulateRefund(amt);
-        if (ok) {
-            Transaction r = new Transaction(idg.next("R-"), "CARD-REFUND", t.getPayer(), amt,
-                    Transaction.Status.REFUNDED);
-            store.save(r);
-            t.setStatus(Transaction.Status.REFUNDED);
-            store.save(t);
-            log.info("card refund ok " + txId);
-            return new PayResp(r.getId(), true, "refund success");
-        } else {
-            log.err("card refund fail " + txId);
-            return new PayResp("", false, "refund failed");
         }
-    }
-
-    private boolean simulateNetwork(PayReq r) {
-        return (r.getAmt().getAmount() % 2) == 0;
-    }
-
-    private boolean simulateRefund(Money amt) {
-        return amt.getAmount() > 0;
+        if (!t.getMethod().equals("CARD"))
+        {
+            return new PayResp(txId, false, "method mismatch");
+        }
+        Transaction r = new Transaction(idg.next("R-"), "CARD-REFUND", t.getPayer(), amt,
+                Transaction.Status.REFUNDED);
+        store.save(r);
+        t.setStatus(Transaction.Status.REFUNDED);
+        store.save(t);
+        return new PayResp(r.getId(), true, "refund success");
     }
 }
 
-class UpiPayment implements IPayment, IRefund {
+class UpiPayment implements IPayment, IRefund
+{
     private final ITransactionStore s;
-    private final ILogger l;
     private final IdGen g;
 
-    public UpiPayment(ITransactionStore s, ILogger l, IdGen g) {
+    public UpiPayment(ITransactionStore s, IdGen g)
+    {
         this.s = s;
-        this.l = l;
         this.g = g;
     }
 
     @Override
-    public PayResp pay(PayReq r) {
+    public PayResp pay(PayReq r)
+    {
         String tx = g.next("UPI-");
         Transaction t = new Transaction(tx, "UPI", r.getPayer(), r.getAmt(), Transaction.Status.PENDING);
         s.save(t);
-        boolean ok = sendToBank(r);
-        if (ok) {
+        boolean ok = sendToBank();
+        if (ok)
+        {
             t.setStatus(Transaction.Status.SUCCESS);
             s.save(t);
-            l.info("upi ok " + tx);
             return new PayResp(tx, true, "upi success");
-        } else {
+        }
+        else
+        {
             t.setStatus(Transaction.Status.FAILED);
             s.save(t);
-            l.err("upi fail " + tx);
             return new PayResp(tx, false, "upi failed");
         }
     }
 
     @Override
-    public PayResp refund(String txId, Money amt) {
-        Optional<Transaction> o = s.find(txId);
-        if (!o.isPresent())
+    public PayResp refund(String txId, Money amt)
+    {
+        Transaction t = s.find(txId);
+        if (t == null)
+        {
             return new PayResp("", false, "tx not found");
-        Transaction t = o.get();
+        }
         if (!t.getMethod().equals("UPI"))
+        {
             return new PayResp(txId, false, "method mismatch");
-        boolean ok = reverse(amt);
-        if (ok) {
+        }
+        boolean ok = reverse();
+        if (ok)
+        {
             Transaction r = new Transaction(g.next("R-"), "UPI-REFUND", t.getPayer(), amt, Transaction.Status.REFUNDED);
             s.save(r);
             t.setStatus(Transaction.Status.REFUNDED);
             s.save(t);
-            l.info("upi refund ok " + txId);
             return new PayResp(r.getId(), true, "refund success");
-        } else {
-            l.err("upi refund fail " + txId);
+        }
+        else
+        {
             return new PayResp("", false, "refund failed");
         }
     }
 
-    private boolean sendToBank(PayReq r) {
-        return r.getAmt().getAmount() % 5 != 0;
+    private boolean sendToBank()
+    {
+        return true;
     }
 
-    private boolean reverse(Money amt) {
-        return amt.getAmount() <= 1000000;
-    }
-}
-
-class WalletPayment implements IPayment {
-    private final ITransactionStore s;
-    private final ILogger l;
-    private final IdGen g;
-    private final Map<String, Long> balances = new HashMap<>();
-
-    public WalletPayment(ITransactionStore s, ILogger l, IdGen g) {
-        this.s = s;
-        this.l = l;
-        this.g = g;
-    }
-
-    public void credit(String uid, long amount) {
-        balances.put(uid, balances.getOrDefault(uid, 0L) + amount);
-    }
-
-    @Override
-    public PayResp pay(PayReq r) {
-        String uid = r.getPayer().getId();
-        long bal = balances.getOrDefault(uid, 0L);
-        if (bal < r.getAmt().getAmount()) {
-            String tx = g.next("W-");
-            Transaction t = new Transaction(tx, "WALLET", r.getPayer(), r.getAmt(), Transaction.Status.FAILED);
-            s.save(t);
-            l.err("wallet low " + tx);
-            return new PayResp(tx, false, "insufficient");
-        }
-        balances.put(uid, bal - r.getAmt().getAmount());
-        String tx = g.next("W-");
-        Transaction t = new Transaction(tx, "WALLET", r.getPayer(), r.getAmt(), Transaction.Status.SUCCESS);
-        s.save(t);
-        l.info("wallet ok " + tx);
-        return new PayResp(tx, true, "wallet success");
+    private boolean reverse()
+    {
+        return true;
     }
 }
 
-// Payment factory - Open/Closed + Dependency Injection via constructor where
-// used
-class PayFactory {
-    private final Map<String, IPayment> map = new HashMap<>();
-    private final Map<String, IRefund> refunds = new HashMap<>();
-
-    public void register(String key, IPayment p) {
-        map.put(key, p);
-        if (p instanceof IRefund)
-            refunds.put(key, (IRefund) p);
-    }
-
-    public IPayment get(String key) {
-        return map.get(key);
-    }
-
-    public Optional<IRefund> getRefund(String key) {
-        return Optional.ofNullable(refunds.get(key));
-    }
-
-    public Set<String> methods() {
-        return new HashSet<>(map.keySet());
-    }
-}
-
-// Service layer - Single responsibility: orchestrates payments, applies
-// policies, logs
-class PaymentService {
-    private final PayFactory f;
+class PaymentService
+{
+    private final Map<String, IPayment> payments = new HashMap<>();
     private final IValidator<PayReq> v;
-    private final ILogger l;
     private final ITransactionStore s;
 
-    public PaymentService(PayFactory f, IValidator<PayReq> v, ILogger l, ITransactionStore s) {
-        this.f = f;
+    public PaymentService(IValidator<PayReq> v, ITransactionStore s)
+    {
         this.v = v;
-        this.l = l;
         this.s = s;
     }
 
-    public PayResp execute(String method, PayReq req) {
-        try {
+    public void register(String key, IPayment p)
+    {
+        payments.put(key, p);
+    }
+
+    public PayResp execute(String method, PayReq req)
+    {
+        try
+        {
             v.validate(req);
-        } catch (ValidationException e) {
+        }
+        catch (ValidationException e)
+        {
             return new PayResp("", false, e.getMessage());
         }
-        IPayment p = f.get(method);
+        IPayment p = payments.get(method);
         if (p == null)
+        {
             return new PayResp("", false, "method unsupported");
-        l.info("exec method " + method + " payer " + req.getPayer().getName());
+        }
         return p.pay(req);
     }
 
-    public PayResp refund(String method, String txId, Money amt) {
-        Optional<IRefund> ro = f.getRefund(method);
-        if (!ro.isPresent())
-            return new PayResp("", false, "refund not supported");
-        IRefund r = ro.get();
-        l.info("refund method " + method + " tx " + txId);
-        return r.refund(txId, amt);
+    public PayResp refund(String method, String txId, Money amt)
+    {
+        IPayment p = payments.get(method);
+        if (p instanceof IRefund ref)
+        {
+            return ref.refund(txId, amt);
+        }
+        return new PayResp("", false, "refund not supported");
     }
 
-    public Optional<Transaction> find(String txId) {
+    public Transaction find(String txId)
+    {
         return s.find(txId);
     }
 }
 
-class ValidationException extends Exception {
-    public ValidationException(String message) {
+class ValidationException extends Exception
+{
+    public ValidationException(String message)
+    {
         super(message);
     }
 }
 
-class BankTransfer implements IPayment, IRefund {
+class BankTransfer implements IPayment, IRefund
+{
     private final ITransactionStore store;
-    private final ILogger log;
     private final IdGen idg;
 
-    public BankTransfer(ITransactionStore s, ILogger l, IdGen idg) {
+    public BankTransfer(ITransactionStore s, IdGen idg)
+    {
         this.store = s;
-        this.log = l;
         this.idg = idg;
     }
 
     @Override
-    public PayResp pay(PayReq req) {
+    public PayResp pay(PayReq req)
+    {
         String tx = idg.next("BT-");
         Transaction t = new Transaction(tx, "BANK_TRANSFER", req.getPayer(), req.getAmt(), Transaction.Status.PENDING);
         store.save(t);
-        boolean ok = simulateTransfer(req);
-        if (ok) {
+        boolean ok = simulateTransfer();
+        if (ok)
+        {
             t.setStatus(Transaction.Status.SUCCESS);
             store.save(t);
-            log.info("bank transfer ok " + tx);
             return new PayResp(tx, true, "bank transfer success");
-        } else {
+        }
+        else
+        {
             t.setStatus(Transaction.Status.FAILED);
             store.save(t);
-            log.err("bank transfer fail " + tx);
             return new PayResp(tx, false, "bank transfer failed");
         }
     }
 
     @Override
-    public PayResp refund(String txId, Money amt) {
-        Optional<Transaction> o = store.find(txId);
-        if (!o.isPresent())
+    public PayResp refund(String txId, Money amt)
+    {
+        Transaction t = store.find(txId);
+        if (t == null)
+        {
             return new PayResp("", false, "tx not found");
-        Transaction t = o.get();
+        }
         if (!t.getMethod().equals("BANK_TRANSFER"))
+        {
             return new PayResp(txId, false, "method mismatch");
-        boolean ok = simulateRefund(amt);
-        if (ok) {
-            Transaction r = new Transaction(idg.next("R-"), "BT-REFUND", t.getPayer(), amt,
-                    Transaction.Status.REFUNDED);
-            store.save(r);
-            t.setStatus(Transaction.Status.REFUNDED);
-            store.save(t);
-            log.info("bank transfer refund ok " + txId);
-            return new PayResp(r.getId(), true, "refund success");
-        } else {
-            log.err("bank transfer refund fail " + txId);
-            return new PayResp("", false, "refund failed");
         }
+        Transaction r = new Transaction(idg.next("R-"), "BT-REFUND", t.getPayer(), amt,
+                Transaction.Status.REFUNDED);
+        store.save(r);
+        t.setStatus(Transaction.Status.REFUNDED);
+        store.save(t);
+        return new PayResp(r.getId(), true, "refund success");
     }
 
-    private boolean simulateTransfer(PayReq r) {
-        return r.getAmt().getAmount() % 3 != 0;
-    }
-
-    private boolean simulateRefund(Money amt) {
-        return amt.getAmount() > 100;
+    private boolean simulateTransfer()
+    {
+        return true;
     }
 }
 
-class CryptoPayment implements IPayment {
-    private final ITransactionStore s;
-    private final ILogger l;
-    private final IdGen g;
-
-    public CryptoPayment(ITransactionStore s, ILogger l, IdGen g) {
-        this.s = s;
-        this.l = l;
-        this.g = g;
-    }
-
-    @Override
-    public PayResp pay(PayReq r) {
-        String tx = g.next("CRYPTO-");
-        Transaction t = new Transaction(tx, "CRYPTO", r.getPayer(), r.getAmt(), Transaction.Status.PENDING);
-        s.save(t);
-        boolean ok = simulateCrypto(r);
-        if (ok) {
-            t.setStatus(Transaction.Status.SUCCESS);
-            s.save(t);
-            l.info("crypto ok " + tx);
-            return new PayResp(tx, true, "crypto success");
-        } else {
-            t.setStatus(Transaction.Status.FAILED);
-            s.save(t);
-            l.err("crypto fail " + tx);
-            return new PayResp(tx, false, "crypto failed");
-        }
-    }
-
-    private boolean simulateCrypto(PayReq r) {
-        return r.getAmt().getAmount() % 7 != 0;
-    }
-}
-
-interface IRecurringPayment {
+interface IRecurringPayment
+{
     void schedule(PayReq req, int intervalDays);
 
     void processRecurring();
 }
 
-class RecurringTransaction extends Transaction {
+class RecurringTransaction extends Transaction
+{
     private final int intervalDays;
     private Date nextRun;
 
-    public RecurringTransaction(String id, String method, Payer p, Money amt, Status st, int interval) {
+    public RecurringTransaction(String id, String method, Payer p, Money amt, Status st, int interval)
+    {
         super(id, method, p, amt, st);
         this.intervalDays = interval;
         this.nextRun = new Date(System.currentTimeMillis() + interval * 24 * 60 * 60 * 1000L);
     }
 
-    public int getIntervalDays() {
+    public int getIntervalDays()
+    {
         return intervalDays;
     }
 
-    public Date getNextRun() {
+    public Date getNextRun()
+    {
         return nextRun;
     }
 
-    public void updateNextRun() {
+    public void updateNextRun()
+    {
         this.nextRun = new Date(nextRun.getTime() + intervalDays * 24 * 60 * 60 * 1000L);
+    }
+
+    public void setNextRun(Date nextRun)
+    {
+        this.nextRun = nextRun;
     }
 }
 
-class Scheduler implements IRecurringPayment {
+class RecurringManager
+{
+    public void saveRecurring(List<RecurringTransaction> recurring, String filename)
+    {
+        try (PrintWriter pw = new PrintWriter(new FileWriter(filename)))
+        {
+            for (RecurringTransaction rt : recurring)
+            {
+                pw.println(rt.getId() + "," + rt.getPayer().getId() + "," + rt.getPayer().getName() + "," +
+                        rt.getAmt().getAmount() + "," + rt.getAmt().getCurrency() + "," + rt.getIntervalDays() + "," + rt.getNextRun().getTime());
+            }
+        }
+        catch (IOException e)
+        {
+            System.out.println("Error saving recurring: " + e.getMessage());
+        }
+    }
+
+    public List<RecurringTransaction> loadRecurring(String filename)
+    {
+        List<RecurringTransaction> recurring = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(filename)))
+        {
+            String line;
+            while ((line = br.readLine()) != null)
+            {
+                String[] parts = line.split(",");
+                if (parts.length == 7)
+                {
+                    String id = parts[0];
+                    String payerId = parts[1];
+                    String payerName = parts[2];
+                    long amount = Long.parseLong(parts[3]);
+                    String currency = parts[4];
+                    int interval = Integer.parseInt(parts[5]);
+                    long nextRunTime = Long.parseLong(parts[6]);
+                    Payer payer = new Payer(payerId, payerName);
+                    Money amt = new Money(amount, currency);
+                    RecurringTransaction rt = new RecurringTransaction(id, "RECURRING", payer, amt, Transaction.Status.PENDING, interval);
+                    rt.setNextRun(new Date(nextRunTime));
+                    recurring.add(rt);
+                }
+            }
+        }
+        catch (IOException e)
+        {
+            // File not found, start empty
+        }
+        return recurring;
+    }
+}
+
+class Scheduler implements IRecurringPayment
+{
     private final List<RecurringTransaction> recurring = new ArrayList<>();
     private final PaymentService svc;
-    private final ILogger log;
     private final IdGen idg;
+    private final RecurringManager rm;
 
-    public Scheduler(PaymentService svc, ILogger log, IdGen idg) {
+    public Scheduler(PaymentService svc, IdGen idg)
+    {
         this.svc = svc;
-        this.log = log;
         this.idg = idg;
+        this.rm = new RecurringManager();
+        recurring.addAll(rm.loadRecurring("recurring.txt"));
     }
 
     @Override
-    public void schedule(PayReq req, int intervalDays) {
+    public void schedule(PayReq req, int intervalDays)
+    {
         String tx = idg.next("REC-");
         RecurringTransaction rt = new RecurringTransaction(tx, "RECURRING", req.getPayer(), req.getAmt(),
                 Transaction.Status.PENDING, intervalDays);
         recurring.add(rt);
-        log.info("scheduled recurring " + tx);
+        rm.saveRecurring(recurring, "recurring.txt");
     }
 
     @Override
-    public void processRecurring() {
+    public void processRecurring()
+    {
         Date now = new Date();
-        for (RecurringTransaction rt : new ArrayList<>(recurring)) {
-            if (rt.getNextRun().before(now) || rt.getNextRun().equals(now)) {
+        for (RecurringTransaction rt : new ArrayList<>(recurring))
+        {
+            if (rt.getNextRun().before(now) || rt.getNextRun().equals(now))
+            {
                 PayReq pr = new PayReq(rt.getPayer(), rt.getAmt(), Collections.emptyMap());
                 PayResp resp = svc.execute("card", pr); // assume card for recurring
-                if (resp.isOk()) {
+                if (resp.isOk())
+                {
                     rt.updateNextRun();
-                    log.info("recurring processed " + rt.getId());
-                } else {
-                    log.err("recurring failed " + rt.getId());
+                    rm.saveRecurring(recurring, "recurring.txt");
+                }
+                else
+                {
                     // remove if failed
                     recurring.remove(rt);
+                    rm.saveRecurring(recurring, "recurring.txt");
                 }
             }
         }
     }
 }
 
-class ReportGenerator {
-    public ReportGenerator() {
+class ReportGenerator
+{
+    private final ITransactionStore store;
+
+    public ReportGenerator(ITransactionStore store)
+    {
+        this.store = store;
     }
 
-    public void generateReport() {
-        System.out.println("=== Transaction Report ===");
-        System.out.println("Total transactions: unknown (in-memory store)");
-        System.out.println("Successful transactions: unknown");
-        System.out.println("Failed transactions: unknown");
+    public void generateReport()
+    {
+        List<Transaction> all = store.getAll();
+        System.out.println("==========================================");
+        System.out.println("         Transaction Report");
+        System.out.println("==========================================");
+        System.out.println();
+        if (all.isEmpty())
+        {
+            System.out.println("No transactions found.");
+            return;
+        }
+        System.out.println("+------------+--------------+-------+--------+----------+");
+        System.out.println("| TxID       | Method       | Payer | Amount | Status   |");
+        System.out.println("+------------+--------------+-------+--------+----------+");
+        int success = 0, failed = 0, pending = 0, refunded = 0;
+        for (Transaction t : all)
+        {
+            String status = t.getStatus().toString();
+            switch (t.getStatus())
+            {
+                case SUCCESS -> success++;
+                case FAILED -> failed++;
+                case PENDING -> pending++;
+                case REFUNDED -> refunded++;
+            }
+            System.out.printf("| %-10s | %-12s | %-5s | %-6s | %-8s |\n",
+                    t.getId(), t.getMethod(), t.getPayer().getName(), t.getAmt().toString(), status);
+        }
+        System.out.println("+------------+--------------+-------+--------+----------+");
+        System.out.println();
+        System.out.println("Summary:");
+        System.out.println("Total Transactions: " + all.size());
+        System.out.println("Successful: " + success);
+        System.out.println("Failed: " + failed);
+        System.out.println("Pending: " + pending);
+        System.out.println("Refunded: " + refunded);
+        System.out.println();
         System.out.println("Report generated at " + new Date());
     }
 }
 
-class PaymentFacade {
+class PaymentFacade
+{
     private final PaymentService svc;
     private final Scheduler sch;
     private final ReportGenerator rg;
 
-    public PaymentFacade(PaymentService svc, Scheduler sch, ReportGenerator rg) {
+    public PaymentFacade(PaymentService svc, Scheduler sch, ReportGenerator rg)
+    {
         this.svc = svc;
         this.sch = sch;
         this.rg = rg;
     }
 
-    public PayResp pay(String method, Payer payer, long amount, String currency) {
+    public PayResp pay(String method, Payer payer, long amount, String currency)
+    {
         Money m = new Money(amount, currency);
         PayReq req = new PayReq(payer, m, Collections.emptyMap());
         return svc.execute(method, req);
     }
 
-    public void scheduleRecurring(Payer payer, long amount, String currency, int interval) {
+    public void scheduleRecurring(Payer payer, long amount, String currency, int interval)
+    {
         Money m = new Money(amount, currency);
         PayReq req = new PayReq(payer, m, Collections.emptyMap());
         sch.schedule(req, interval);
     }
 
-    public void processRecurring() {
+    public void processRecurring()
+    {
         sch.processRecurring();
     }
 
-    public void generateReport() {
+    public void generateReport()
+    {
         rg.generateReport();
     }
 }
 
-// Demo main
+class PayerManager
+{
+    public void savePayers(List<Payer> payers, String filename)
+    {
+        try (PrintWriter pw = new PrintWriter(new FileWriter(filename)))
+        {
+            for (Payer p : payers)
+            {
+                pw.println(p.getId() + "," + p.getName());
+            }
+        }
+        catch (IOException e)
+        {
+            System.out.println("Error saving payers: " + e.getMessage());
+        }
+    }
 
-public class Main {
-    public static void main(String[] args) {
+    public List<Payer> loadPayers(String filename)
+    {
+        List<Payer> payers = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(filename)))
+        {
+            String line;
+            while ((line = br.readLine()) != null)
+            {
+                String[] parts = line.split(",");
+                if (parts.length == 2)
+                {
+                    payers.add(new Payer(parts[0], parts[1]));
+                }
+            }
+        }
+        catch (IOException e)
+        {
+            // File not found or error, start with empty list
+        }
+        return payers;
+    }
+}
+
+// Demo main
+public class Main
+{
+    public static void main(String[] args)
+    {
         Scanner sc = new Scanner(System.in);
 
         System.out.println("==========================================");
@@ -704,78 +885,70 @@ public class Main {
         System.out.println("==========================================");
         System.out.println();
 
-        ITransactionStore store = new MemTxStore();
-        ILogger log = new ConsoleLogger();
+        ITransactionStore store = new FileTxStore("transactions.txt");
         IdGen idg = new IdGen();
-        PayFactory fact = new PayFactory();
 
-        CardPayment card = new CardPayment(store, log, idg);
-        UpiPayment upi = new UpiPayment(store, log, idg);
-        WalletPayment wal = new WalletPayment(store, log, idg);
-        BankTransfer bt = new BankTransfer(store, log, idg);
-        CryptoPayment crypto = new CryptoPayment(store, log, idg);
-
-        fact.register("card", card);
-        fact.register("upi", upi);
-        fact.register("wallet", wal);
-        fact.register("banktransfer", bt);
-        fact.register("crypto", crypto);
+        CardPayment card = new CardPayment(store, idg);
+        UpiPayment upi = new UpiPayment(store, idg);
+        BankTransfer bt = new BankTransfer(store, idg);
 
         PayReqValidator val = new PayReqValidator();
-        PaymentService svc = new PaymentService(fact, val, log, store);
+        PaymentService svc = new PaymentService(val, store);
 
-        Scheduler sch = new Scheduler(svc, log, idg);
-        ReportGenerator rg = new ReportGenerator();
+        svc.register("card", card);
+        svc.register("upi", upi);
+        svc.register("banktransfer", bt);
+
+        Scheduler sch = new Scheduler(svc, idg);
+        ReportGenerator rg = new ReportGenerator(store);
         PaymentFacade facade = new PaymentFacade(svc, sch, rg);
 
-        List<Payer> payers = new ArrayList<>();
+        PayerManager pm = new PayerManager();
+        List<Payer> payers = pm.loadPayers("payers.txt");
 
-        System.out.println("How many payers do you want to add?");
+        System.out.println("Loaded " + payers.size() + " payers from file.");
+        System.out.println("How many additional payers do you want to add?");
         int numPayers = sc.nextInt();
-        sc.nextLine(); // consume newline
+        sc.nextLine();
 
-        for (int i = 0; i < numPayers; i++) {
+        for (int i = 0; i < numPayers; i++)
+        {
             System.out.println("Enter Payer ID:");
             String id = sc.nextLine();
             System.out.println("Enter Payer Name:");
             String name = sc.nextLine();
             Payer p = new Payer(id, name);
             payers.add(p);
-
-            System.out.println("Enter initial wallet balance in paise (0 if none):");
-            long balance = sc.nextLong();
-            sc.nextLine();
-            if (balance > 0) {
-                wal.credit(id, balance);
-                System.out.println("Wallet credited with " + new Money(balance, "INR"));
-            }
         }
+
+        pm.savePayers(payers, "payers.txt");
 
         // Add NetBanking
         IPayment nb;
-        nb = new IPayment() {
+        nb = new IPayment()
+        {
             private final ITransactionStore s = store;
-            private final ILogger l2 = log;
             private final IdGen g2 = idg;
 
             @Override
-            public PayResp pay(PayReq req) {
+            public PayResp pay(PayReq req)
+            {
                 String tx = g2.next("NB-");
                 Transaction t = new Transaction(tx, "NETBANK", req.getPayer(), req.getAmt(),
                         Transaction.Status.PENDING);
                 s.save(t);
                 t.setStatus(Transaction.Status.SUCCESS);
                 s.save(t);
-                l2.info("netbank ok " + tx);
                 return new PayResp(tx, true, "netbank success");
             }
         };
-        fact.register("netbank", nb);
+        svc.register("netbank", nb);
 
-        System.out.println("Available payment methods: card, upi, wallet, banktransfer, crypto, netbank");
+        System.out.println("Available payment methods: card, upi, banktransfer, netbank");
         System.out.println();
 
-        while (true) {
+        while (true)
+        {
             System.out.println("==========================================");
             System.out.println("Menu:");
             System.out.println("1. Make a Payment");
@@ -789,28 +962,68 @@ public class Main {
             int choice = sc.nextInt();
             sc.nextLine();
 
-            switch (choice) {
-                case 1:
-                    System.out.println("Enter payment method:");
-                    String method = sc.nextLine();
+            switch (choice)
+            {
+                case 1 ->
+                {
+                    System.out.println("Choose payment method:");
+                    System.out.println("1. card");
+                    System.out.println("2. upi");
+                    System.out.println("3. banktransfer");
+                    System.out.println("4. netbank");
+                    int methodChoice = sc.nextInt();
+                    sc.nextLine();
+                    String method;
+                    switch (methodChoice)
+                    {
+                        case 1 -> method = "card";
+                        case 2 -> method = "upi";
+                        case 3 -> method = "banktransfer";
+                        case 4 -> method = "netbank";
+                        default ->
+                        {
+                            System.out.println("Invalid payment method choice.");
+                            continue;
+                        }
+                    }
                     System.out.println("Enter payer index (0 to " + (payers.size() - 1) + "):");
                     int pIdx = sc.nextInt();
                     System.out.println("Enter amount in paise:");
                     long amount = sc.nextLong();
                     sc.nextLine();
-                    if (pIdx >= 0 && pIdx < payers.size()) {
+                    if (pIdx >= 0 && pIdx < payers.size())
+                    {
                         Payer payer = payers.get(pIdx);
                         PayReq req = new PayReq(payer, new Money(amount, "INR"), Collections.emptyMap());
                         PayResp resp = svc.execute(method, req);
                         System.out.println("Payment Result: " + (resp.isOk() ? "SUCCESS" : "FAILED") + " | "
                                 + resp.getMsg() + " | TxID: " + resp.getTxId());
-                    } else {
+                    }
+                    else
+                    {
                         System.out.println("Invalid payer index.");
                     }
-                    break;
-                case 2:
-                    System.out.println("Enter payment method for refund:");
-                    String refMethod = sc.nextLine();
+                }
+                case 2 ->
+                {
+                    System.out.println("Choose payment method for refund:");
+                    System.out.println("1. card");
+                    System.out.println("2. upi");
+                    System.out.println("3. banktransfer");
+                    int refMethodChoice = sc.nextInt();
+                    sc.nextLine();
+                    String refMethod;
+                    switch (refMethodChoice)
+                    {
+                        case 1 -> refMethod = "card";
+                        case 2 -> refMethod = "upi";
+                        case 3 -> refMethod = "banktransfer";
+                        default ->
+                        {
+                            System.out.println("Invalid refund method choice.");
+                            continue;
+                        }
+                    }
                     System.out.println("Enter transaction ID to refund:");
                     String txId = sc.nextLine();
                     System.out.println("Enter refund amount in paise:");
@@ -819,15 +1032,23 @@ public class Main {
                     PayResp refResp = svc.refund(refMethod, txId, new Money(refAmt, "INR"));
                     System.out.println(
                             "Refund Result: " + (refResp.isOk() ? "SUCCESS" : "FAILED") + " | " + refResp.getMsg());
-                    break;
-                case 3:
+                }
+                case 3 ->
+                {
                     System.out.println("Enter transaction ID:");
                     String viewTxId = sc.nextLine();
-                    svc.find(viewTxId).ifPresentOrElse(
-                            tx -> System.out.println("Transaction: " + tx),
-                            () -> System.out.println("Transaction not found."));
-                    break;
-                case 4:
+                    Transaction tx = svc.find(viewTxId);
+                    if (tx != null)
+                    {
+                        System.out.println("Transaction: " + tx);
+                    }
+                    else
+                    {
+                        System.out.println("Transaction not found.");
+                    }
+                }
+                case 4 ->
+                {
                     System.out.println("Enter payer index:");
                     int recPIdx = sc.nextInt();
                     System.out.println("Enter amount in paise:");
@@ -835,27 +1056,36 @@ public class Main {
                     System.out.println("Enter interval in days:");
                     int interval = sc.nextInt();
                     sc.nextLine();
-                    if (recPIdx >= 0 && recPIdx < payers.size()) {
+                    if (recPIdx >= 0 && recPIdx < payers.size())
+                    {
                         Payer recPayer = payers.get(recPIdx);
                         facade.scheduleRecurring(recPayer, recAmt, "INR", interval);
                         System.out.println("Recurring payment scheduled.");
-                    } else {
+                    }
+                    else
+                    {
                         System.out.println("Invalid payer index.");
                     }
-                    break;
-                case 5:
+                }
+                case 5 ->
+                {
                     facade.processRecurring();
                     System.out.println("Recurring payments processed.");
-                    break;
-                case 6:
+                }
+                case 6 ->
+                {
                     facade.generateReport();
-                    break;
-                case 7:
+                }
+                case 7 ->
+                {
                     System.out.println("Exiting...");
                     sc.close();
                     return;
-                default:
+                }
+                default ->
+                {
                     System.out.println("Invalid choice. Try again.");
+                }
             }
             System.out.println();
         }
