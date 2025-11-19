@@ -1,9 +1,92 @@
-package com.pay;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
-// core DTOs
+public class Main
+{
+    public static void main(String[] args)
+    {
+        ITransactionStore store = new MemTxStore();
+        ILogger log = new ConsoleLogger();
+        IdGen idg = new IdGen();
+        PayFactory fact = new PayFactory();
+
+        CardPayment card = new CardPayment(store, log, idg);
+        UpiPayment upi = new UpiPayment(store, log, idg);
+        WalletPayment wal = new WalletPayment(store, log, idg);
+
+        fact.register("card", card);
+        fact.register("upi", upi);
+        fact.register("wallet", wal);
+
+        PayReqValidator val = new PayReqValidator();
+        PaymentService svc = new PaymentService(fact, val, log, store);
+
+        Payer p1 = new Payer("u1", "Kush");
+        Payer p2 = new Payer("u2", "Riya");
+
+        wal.credit("u1", 10000); // 100.00
+        wal.credit("u2", 50000); // 500.00
+
+        Map<String, String> m = new HashMap<>();
+        m.put("order", "ord-100");
+
+        PayReq r1 = new PayReq(p1, new Money(2500, "INR"), m);
+        PayReq r2 = new PayReq(p2, new Money(12345, "INR"), m);
+        PayReq r3 = new PayReq(p1, new Money(12000, "INR"), m);
+
+        System.out.println("=== try wallet pay ===");
+        PayResp a1 = svc.execute("wallet", r1);
+        System.out.println(a1);
+
+        System.out.println("=== try card pay ===");
+        PayResp a2 = svc.execute("card", r2);
+        System.out.println(a2);
+
+        System.out.println("=== try upi pay ===");
+        PayResp a3 = svc.execute("upi", r3);
+        System.out.println(a3);
+
+        System.out.println("=== try refund card ===");
+        if (a2.isOk())
+        {
+            PayResp rf = svc.refund("card", a2.getTxId(), new Money(12345, "INR"));
+            System.out.println(rf);
+        }
+
+        System.out.println("=== find txs ===");
+        svc.find(a1.getTxId()).ifPresent(System.out::println);
+        svc.find(a2.getTxId()).ifPresent(System.out::println);
+        svc.find(a3.getTxId()).ifPresent(System.out::println);
+
+        System.out.println("=== add new method easily: NetBanking ===");
+        IPayment nb = new IPayment()
+        {
+            private final ITransactionStore s = store;
+            private final ILogger l2 = log;
+            private final IdGen g2 = idg;
+
+            public PayResp pay(PayReq req)
+            {
+                String tx = g2.next("NB-");
+                Transaction t = new Transaction(tx, "NETBANK", req.getPayer(), req.getAmt(), Transaction.Status.PENDING);
+                s.save(t);
+                t.setStatus(Transaction.Status.SUCCESS);
+                s.save(t);
+                l2.info("netbank ok " + tx);
+                return new PayResp(tx, true, "netbank success");
+            }
+        };
+
+        fact.register("netbank", nb);
+        PayReq r4 = new PayReq(p2, new Money(20000, "INR"), null);
+        PayResp a4 = svc.execute("netbank", r4);
+        System.out.println(a4);
+    } 
+}
+
+// --- Domain Objects ---
+
 class Money
 {
     private final long amount; // in paise
@@ -130,7 +213,8 @@ class PayResp
     }
 }
 
-// Interfaces - SRP + ISP
+// --- Interfaces ---
+
 interface IPayment
 {
     PayResp pay(PayReq req);
@@ -147,7 +231,8 @@ interface ITransactionStore
     Optional<Transaction> find(String txId);
 }
 
-// Transaction entity
+// --- Entities ---
+
 class Transaction
 {
     public enum Status {PENDING, SUCCESS, FAILED, REFUNDED}
@@ -216,7 +301,8 @@ class Transaction
     }
 }
 
-// Simple in-memory store - Dependency Inversion (abstraction)
+// --- Infrastructure Implementations ---
+
 class MemTxStore implements ITransactionStore
 {
     private final Map<String, Transaction> map = new HashMap<>();
@@ -232,7 +318,6 @@ class MemTxStore implements ITransactionStore
     }
 }
 
-// Logger / Observer - single responsibility
 interface ILogger
 {
     void info(String s);
@@ -252,7 +337,6 @@ class ConsoleLogger implements ILogger
     }
 }
 
-// Unique id generator
 class IdGen
 {
     private final AtomicLong c = new AtomicLong(1000);
@@ -263,7 +347,8 @@ class IdGen
     }
 }
 
-// Validators
+// --- Validation ---
+
 interface IValidator<T>
 {
     void validate(T t);
@@ -279,7 +364,8 @@ class PayReqValidator implements IValidator<PayReq>
     }
 }
 
-// Payment methods implementations - Open/Closed: add new impl without changing others
+// --- Payment Strategies ---
+
 class CardPayment implements IPayment, IRefund
 {
     private final ITransactionStore store;
@@ -458,7 +544,8 @@ class WalletPayment implements IPayment
     }
 }
 
-// Payment factory - Open/Closed + Dependency Injection via constructor where used
+// --- Factory & Service ---
+
 class PayFactory
 {
     private final Map<String, IPayment> map = new HashMap<>();
@@ -486,7 +573,6 @@ class PayFactory
     }
 }
 
-// Service layer - Single responsibility: orchestrates payments, applies policies, logs
 class PaymentService
 {
     private final PayFactory f;
@@ -526,7 +612,8 @@ class PaymentService
     }
 }
 
-// Notification system (observer-like) - ISP: INotifier separate
+// --- Notifications (Extra) ---
+
 interface INotifier
 {
     void notify(String to, String msg);
@@ -545,89 +632,5 @@ class SmsNotifier implements INotifier
     public void notify(String to, String msg)
     {
         System.out.println("[SMS to " + to + "] " + msg);
-    }
-}
-
-// Demo main
-public class Main
-{
-    public static void main(String[] args)
-    {
-        ITransactionStore store = new MemTxStore();
-        ILogger log = new ConsoleLogger();
-        IdGen idg = new IdGen();
-        PayFactory fact = new PayFactory();
-
-        CardPayment card = new CardPayment(store, log, idg);
-        UpiPayment upi = new UpiPayment(store, log, idg);
-        WalletPayment wal = new WalletPayment(store, log, idg);
-
-        fact.register("card", card);
-        fact.register("upi", upi);
-        fact.register("wallet", wal);
-
-        PayReqValidator val = new PayReqValidator();
-        PaymentService svc = new PaymentService(fact, val, log, store);
-
-        Payer p1 = new Payer("u1", "Kush");
-        Payer p2 = new Payer("u2", "Riya");
-
-        wal.credit("u1", 10000); // 100.00
-        wal.credit("u2", 50000); // 500.00
-
-        Map<String, String> m = new HashMap<>();
-        m.put("order", "ord-100");
-
-        PayReq r1 = new PayReq(p1, new Money(2500, "INR"), m);
-        PayReq r2 = new PayReq(p2, new Money(12345, "INR"), m);
-        PayReq r3 = new PayReq(p1, new Money(12000, "INR"), m);
-
-        System.out.println("=== try wallet pay ===");
-        PayResp a1 = svc.execute("wallet", r1);
-        System.out.println(a1);
-
-        System.out.println("=== try card pay ===");
-        PayResp a2 = svc.execute("card", r2);
-        System.out.println(a2);
-
-        System.out.println("=== try upi pay ===");
-        PayResp a3 = svc.execute("upi", r3);
-        System.out.println(a3);
-
-        System.out.println("=== try refund card ===");
-        if (a2.isOk())
-        {
-            PayResp rf = svc.refund("card", a2.getTxId(), new Money(12345, "INR"));
-            System.out.println(rf);
-        }
-
-        System.out.println("=== find txs ===");
-        svc.find(a1.getTxId()).ifPresent(System.out::println);
-        svc.find(a2.getTxId()).ifPresent(System.out::println);
-        svc.find(a3.getTxId()).ifPresent(System.out::println);
-
-        System.out.println("=== add new method easily: NetBanking ===");
-        IPayment nb = new IPayment()
-        {
-            private final ITransactionStore s = store;
-            private final ILogger l2 = log;
-            private final IdGen g2 = idg;
-
-            public PayResp pay(PayReq req)
-            {
-                String tx = g2.next("NB-");
-                Transaction t = new Transaction(tx, "NETBANK", req.getPayer(), req.getAmt(), Transaction.Status.PENDING);
-                s.save(t);
-                t.setStatus(Transaction.Status.SUCCESS);
-                s.save(t);
-                l2.info("netbank ok " + tx);
-                return new PayResp(tx, true, "netbank success");
-            }
-        };
-
-        fact.register("netbank", nb);
-        PayReq r4 = new PayReq(p2, new Money(20000, "INR"), null);
-        PayResp a4 = svc.execute("netbank", r4);
-        System.out.println(a4);
     }
 }
