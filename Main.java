@@ -1,102 +1,8 @@
-<<<<<<< HEAD
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 // core DTOs
 class Money {
-=======
-
-import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
-
-public class Main
-{
-    public static void main(String[] args)
-    {
-        ITransactionStore store = new MemTxStore();
-        ILogger log = new ConsoleLogger();
-        IdGen idg = new IdGen();
-        PayFactory fact = new PayFactory();
-
-        CardPayment card = new CardPayment(store, log, idg);
-        UpiPayment upi = new UpiPayment(store, log, idg);
-        WalletPayment wal = new WalletPayment(store, log, idg);
-
-        fact.register("card", card);
-        fact.register("upi", upi);
-        fact.register("wallet", wal);
-
-        PayReqValidator val = new PayReqValidator();
-        PaymentService svc = new PaymentService(fact, val, log, store);
-
-        Payer p1 = new Payer("u1", "Kush");
-        Payer p2 = new Payer("u2", "Riya");
-
-        wal.credit("u1", 10000); // 100.00
-        wal.credit("u2", 50000); // 500.00
-
-        Map<String, String> m = new HashMap<>();
-        m.put("order", "ord-100");
-
-        PayReq r1 = new PayReq(p1, new Money(2500, "INR"), m);
-        PayReq r2 = new PayReq(p2, new Money(12345, "INR"), m);
-        PayReq r3 = new PayReq(p1, new Money(12000, "INR"), m);
-
-        System.out.println("=== try wallet pay ===");
-        PayResp a1 = svc.execute("wallet", r1);
-        System.out.println(a1);
-
-        System.out.println("=== try card pay ===");
-        PayResp a2 = svc.execute("card", r2);
-        System.out.println(a2);
-
-        System.out.println("=== try upi pay ===");
-        PayResp a3 = svc.execute("upi", r3);
-        System.out.println(a3);
-
-        System.out.println("=== try refund card ===");
-        if (a2.isOk())
-        {
-            PayResp rf = svc.refund("card", a2.getTxId(), new Money(12345, "INR"));
-            System.out.println(rf);
-        }
-
-        System.out.println("=== find txs ===");
-        svc.find(a1.getTxId()).ifPresent(System.out::println);
-        svc.find(a2.getTxId()).ifPresent(System.out::println);
-        svc.find(a3.getTxId()).ifPresent(System.out::println);
-
-        System.out.println("=== add new method easily: NetBanking ===");
-        IPayment nb = new IPayment()
-        {
-            private final ITransactionStore s = store;
-            private final ILogger l2 = log;
-            private final IdGen g2 = idg;
-
-            public PayResp pay(PayReq req)
-            {
-                String tx = g2.next("NB-");
-                Transaction t = new Transaction(tx, "NETBANK", req.getPayer(), req.getAmt(), Transaction.Status.PENDING);
-                s.save(t);
-                t.setStatus(Transaction.Status.SUCCESS);
-                s.save(t);
-                l2.info("netbank ok " + tx);
-                return new PayResp(tx, true, "netbank success");
-            }
-        };
-
-        fact.register("netbank", nb);
-        PayReq r4 = new PayReq(p2, new Money(20000, "INR"), null);
-        PayResp a4 = svc.execute("netbank", r4);
-        System.out.println(a4);
-    } 
-}
-
-// --- Domain Objects ---
-
-class Money
-{
->>>>>>> 51b4e122bf15dc298f9a8099d95d8ca8d004cc7d
     private final long amount; // in paise
     private final String currency;
 
@@ -202,15 +108,8 @@ class PayResp {
     }
 }
 
-<<<<<<< HEAD
 // Interfaces - SRP + ISP
 interface IPayment {
-=======
-// --- Interfaces ---
-
-interface IPayment
-{
->>>>>>> 51b4e122bf15dc298f9a8099d95d8ca8d004cc7d
     PayResp pay(PayReq req);
 }
 
@@ -224,19 +123,11 @@ interface ITransactionStore {
     Optional<Transaction> find(String txId);
 }
 
-<<<<<<< HEAD
 // Transaction entity
 class Transaction {
     public enum Status {
         PENDING, SUCCESS, FAILED, REFUNDED
     }
-=======
-// --- Entities ---
-
-class Transaction
-{
-    public enum Status {PENDING, SUCCESS, FAILED, REFUNDED}
->>>>>>> 51b4e122bf15dc298f9a8099d95d8ca8d004cc7d
 
     private final String id;
     private final String method;
@@ -295,15 +186,8 @@ class Transaction
     }
 }
 
-<<<<<<< HEAD
 // Simple in-memory store - Dependency Inversion (abstraction)
 class MemTxStore implements ITransactionStore {
-=======
-// --- Infrastructure Implementations ---
-
-class MemTxStore implements ITransactionStore
-{
->>>>>>> 51b4e122bf15dc298f9a8099d95d8ca8d004cc7d
     private final Map<String, Transaction> map = new HashMap<>();
 
     @Override
@@ -317,13 +201,8 @@ class MemTxStore implements ITransactionStore
     }
 }
 
-<<<<<<< HEAD
 // Logger / Observer - single responsibility
 interface ILogger {
-=======
-interface ILogger
-{
->>>>>>> 51b4e122bf15dc298f9a8099d95d8ca8d004cc7d
     void info(String s);
 
     void err(String s);
@@ -341,13 +220,8 @@ class ConsoleLogger implements ILogger {
     }
 }
 
-<<<<<<< HEAD
 // Unique id generator
 class IdGen {
-=======
-class IdGen
-{
->>>>>>> 51b4e122bf15dc298f9a8099d95d8ca8d004cc7d
     private final AtomicLong c = new AtomicLong(1000);
 
     public String next(String prefix) {
@@ -355,17 +229,9 @@ class IdGen
     }
 }
 
-<<<<<<< HEAD
 // Validators
 interface IValidator<T> {
     void validate(T t) throws ValidationException;
-=======
-// --- Validation ---
-
-interface IValidator<T>
-{
-    void validate(T t);
->>>>>>> 51b4e122bf15dc298f9a8099d95d8ca8d004cc7d
 }
 
 class PayReqValidator implements IValidator<PayReq> {
@@ -380,16 +246,9 @@ class PayReqValidator implements IValidator<PayReq> {
     }
 }
 
-<<<<<<< HEAD
 // Payment methods implementations - Open/Closed: add new impl without changing
 // others
 class CardPayment implements IPayment, IRefund {
-=======
-// --- Payment Strategies ---
-
-class CardPayment implements IPayment, IRefund
-{
->>>>>>> 51b4e122bf15dc298f9a8099d95d8ca8d004cc7d
     private final ITransactionStore store;
     private final ILogger log;
     private final IdGen idg;
@@ -548,16 +407,9 @@ class WalletPayment implements IPayment {
     }
 }
 
-<<<<<<< HEAD
 // Payment factory - Open/Closed + Dependency Injection via constructor where
 // used
 class PayFactory {
-=======
-// --- Factory & Service ---
-
-class PayFactory
-{
->>>>>>> 51b4e122bf15dc298f9a8099d95d8ca8d004cc7d
     private final Map<String, IPayment> map = new HashMap<>();
     private final Map<String, IRefund> refunds = new HashMap<>();
 
@@ -580,14 +432,9 @@ class PayFactory
     }
 }
 
-<<<<<<< HEAD
 // Service layer - Single responsibility: orchestrates payments, applies
 // policies, logs
 class PaymentService {
-=======
-class PaymentService
-{
->>>>>>> 51b4e122bf15dc298f9a8099d95d8ca8d004cc7d
     private final PayFactory f;
     private final IValidator<PayReq> v;
     private final ILogger l;
@@ -627,24 +474,9 @@ class PaymentService
     }
 }
 
-<<<<<<< HEAD
 class ValidationException extends Exception {
     public ValidationException(String message) {
         super(message);
-=======
-// --- Notifications (Extra) ---
-
-interface INotifier
-{
-    void notify(String to, String msg);
-}
-
-class EmailNotifier implements INotifier
-{
-    public void notify(String to, String msg)
-    {
-        System.out.println("[EMAIL to " + to + "] " + msg);
->>>>>>> 51b4e122bf15dc298f9a8099d95d8ca8d004cc7d
     }
 }
 
@@ -859,7 +691,6 @@ class PaymentFacade {
         rg.generateReport();
     }
 }
-<<<<<<< HEAD
 
 // Demo main
 
@@ -1030,5 +861,3 @@ public class Main {
         }
     }
 }
-=======
->>>>>>> 51b4e122bf15dc298f9a8099d95d8ca8d004cc7d
