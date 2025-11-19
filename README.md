@@ -1,6 +1,6 @@
 # Payment Gateway System
 
-Hey there! This is a solid payment gateway system I built in Java, following SOLID principles to make it easy to handle different payment methods. It's all about clean code, being able to add new stuff without breaking old parts, and showing how real software should be designed. Now with file-based persistence for better data management!
+Hey there! This is a solid payment gateway system built by our team in Java, following SOLID principles to make it easy to handle different payment methods. It's all about clean code, being able to add new stuff without breaking old parts, and showing how real software should be designed. Now with file-based persistence for better data management!
 
 ## Features
 
@@ -177,9 +177,12 @@ Feel free to contribute:
 
 This is under MIT License - check LICENSE for details.
 
-## Author
+## Authors
 
-Aadit Wocode - GitHub: aaditwocode
+- Vasu Tayal
+- Aditya Pratap Singh
+- Prakhar Singhal
+- Kush Kansal
 
 ## Thanks
 

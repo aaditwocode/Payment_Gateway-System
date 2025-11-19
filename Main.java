@@ -830,6 +830,16 @@ class PaymentFacade
     {
         rg.generateReport();
     }
+
+    public PayResp refund(String method, String txId, Money amt)
+    {
+        return svc.refund(method, txId, amt);
+    }
+
+    public Transaction find(String txId)
+    {
+        return svc.find(txId);
+    }
 }
 
 class PayerManager
@@ -875,16 +885,8 @@ class PayerManager
 // Demo main
 public class Main
 {
-    public static void main(String[] args)
+    private static PaymentFacade setupPayments()
     {
-        Scanner sc = new Scanner(System.in);
-
-        System.out.println("==========================================");
-        System.out.println("   Welcome to Payment Gateway System");
-        System.out.println("   Built with SOLID Principles in Java");
-        System.out.println("==========================================");
-        System.out.println();
-
         ITransactionStore store = new FileTxStore("transactions.txt");
         IdGen idg = new IdGen();
 
@@ -903,29 +905,8 @@ public class Main
         ReportGenerator rg = new ReportGenerator(store);
         PaymentFacade facade = new PaymentFacade(svc, sch, rg);
 
-        PayerManager pm = new PayerManager();
-        List<Payer> payers = pm.loadPayers("payers.txt");
-
-        System.out.println("Loaded " + payers.size() + " payers from file.");
-        System.out.println("How many additional payers do you want to add?");
-        int numPayers = sc.nextInt();
-        sc.nextLine();
-
-        for (int i = 0; i < numPayers; i++)
-        {
-            System.out.println("Enter Payer ID:");
-            String id = sc.nextLine();
-            System.out.println("Enter Payer Name:");
-            String name = sc.nextLine();
-            Payer p = new Payer(id, name);
-            payers.add(p);
-        }
-
-        pm.savePayers(payers, "payers.txt");
-
         // Add NetBanking
-        IPayment nb;
-        nb = new IPayment()
+        IPayment nb = new IPayment()
         {
             private final ITransactionStore s = store;
             private final IdGen g2 = idg;
@@ -944,21 +925,53 @@ public class Main
         };
         svc.register("netbank", nb);
 
+        return facade;
+    }
+
+    private static List<Payer> managePayers(Scanner sc)
+    {
+        PayerManager pm = new PayerManager();
+        List<Payer> payers = pm.loadPayers("payers.txt");
+
+        System.out.println("Loaded " + payers.size() + " payers from file.");
+        System.out.print("How many additional payers do you want to add? ");
+        int numPayers = sc.nextInt();
+        sc.nextLine();
+
+        for (int i = 0; i < numPayers; i++)
+        {
+            System.out.print("Enter Payer ID: ");
+            String id = sc.nextLine();
+            System.out.print("Enter Payer Name: ");
+            String name = sc.nextLine();
+            Payer p = new Payer(id, name);
+            payers.add(p);
+        }
+
+        pm.savePayers(payers, "payers.txt");
+
+        return payers;
+    }
+
+    private static void runDemo(PaymentFacade facade, List<Payer> payers, Scanner sc)
+    {
         System.out.println("Available payment methods: card, upi, banktransfer, netbank");
         System.out.println();
 
         while (true)
         {
-            System.out.println("==========================================");
-            System.out.println("Menu:");
-            System.out.println("1. Make a Payment");
-            System.out.println("2. Refund a Transaction");
-            System.out.println("3. View Transaction Details");
-            System.out.println("4. Schedule Recurring Payment");
-            System.out.println("5. Process Recurring Payments");
-            System.out.println("6. Generate Report");
-            System.out.println("7. Exit");
-            System.out.println("Choose an option:");
+            System.out.println("┌─────────────────────────────────────┐");
+            System.out.println("│           PAYMENT MENU              │");
+            System.out.println("├─────────────────────────────────────┤");
+            System.out.println("│ 1. Make a Payment                   │");
+            System.out.println("│ 2. Refund a Transaction             │");
+            System.out.println("│ 3. View Transaction Details         │");
+            System.out.println("│ 4. Schedule Recurring Payment       │");
+            System.out.println("│ 5. Process Recurring Payments       │");
+            System.out.println("│ 6. Generate Report                  │");
+            System.out.println("│ 7. Exit                             │");
+            System.out.println("└─────────────────────────────────────┘");
+            System.out.print("Choose an option (1-7): ");
             int choice = sc.nextInt();
             sc.nextLine();
 
@@ -966,11 +979,13 @@ public class Main
             {
                 case 1 ->
                 {
+                    System.out.println("\n--- Make a Payment ---");
                     System.out.println("Choose payment method:");
                     System.out.println("1. card");
                     System.out.println("2. upi");
                     System.out.println("3. banktransfer");
                     System.out.println("4. netbank");
+                    System.out.print("Enter choice: ");
                     int methodChoice = sc.nextInt();
                     sc.nextLine();
                     String method;
@@ -986,30 +1001,42 @@ public class Main
                             continue;
                         }
                     }
-                    System.out.println("Enter payer index (0 to " + (payers.size() - 1) + "):");
-                    int pIdx = sc.nextInt();
-                    System.out.println("Enter amount in paise:");
+                    System.out.println("Available payers:");
+                    for (Payer p : payers)
+                    {
+                        System.out.println("ID: " + p.getId() + " Name: " + p.getName());
+                    }
+                    System.out.print("Enter payer ID: ");
+                    String pid = sc.nextLine();
+                    Payer payer = null;
+                    for (Payer p : payers)
+                    {
+                        if (p.getId().equals(pid))
+                        {
+                            payer = p;
+                            break;
+                        }
+                    }
+                    if (payer == null)
+                    {
+                        System.out.println("Invalid payer ID.");
+                        continue;
+                    }
+                    System.out.print("Enter amount in paise: ");
                     long amount = sc.nextLong();
                     sc.nextLine();
-                    if (pIdx >= 0 && pIdx < payers.size())
-                    {
-                        Payer payer = payers.get(pIdx);
-                        PayReq req = new PayReq(payer, new Money(amount, "INR"), Collections.emptyMap());
-                        PayResp resp = svc.execute(method, req);
-                        System.out.println("Payment Result: " + (resp.isOk() ? "SUCCESS" : "FAILED") + " | "
-                                + resp.getMsg() + " | TxID: " + resp.getTxId());
-                    }
-                    else
-                    {
-                        System.out.println("Invalid payer index.");
-                    }
+                    PayResp resp = facade.pay(method, payer, amount, "INR");
+                    System.out.println("Payment Result: " + (resp.isOk() ? "SUCCESS" : "FAILED") + " | "
+                            + resp.getMsg() + " | TxID: " + resp.getTxId());
                 }
                 case 2 ->
                 {
+                    System.out.println("\n--- Refund a Transaction ---");
                     System.out.println("Choose payment method for refund:");
                     System.out.println("1. card");
                     System.out.println("2. upi");
                     System.out.println("3. banktransfer");
+                    System.out.print("Enter choice: ");
                     int refMethodChoice = sc.nextInt();
                     sc.nextLine();
                     String refMethod;
@@ -1024,20 +1051,21 @@ public class Main
                             continue;
                         }
                     }
-                    System.out.println("Enter transaction ID to refund:");
+                    System.out.print("Enter transaction ID to refund: ");
                     String txId = sc.nextLine();
-                    System.out.println("Enter refund amount in paise:");
+                    System.out.print("Enter refund amount in paise: ");
                     long refAmt = sc.nextLong();
                     sc.nextLine();
-                    PayResp refResp = svc.refund(refMethod, txId, new Money(refAmt, "INR"));
+                    PayResp refResp = facade.refund(refMethod, txId, new Money(refAmt, "INR"));
                     System.out.println(
                             "Refund Result: " + (refResp.isOk() ? "SUCCESS" : "FAILED") + " | " + refResp.getMsg());
                 }
                 case 3 ->
                 {
-                    System.out.println("Enter transaction ID:");
+                    System.out.println("\n--- View Transaction Details ---");
+                    System.out.print("Enter transaction ID: ");
                     String viewTxId = sc.nextLine();
-                    Transaction tx = svc.find(viewTxId);
+                    Transaction tx = facade.find(viewTxId);
                     if (tx != null)
                     {
                         System.out.println("Transaction: " + tx);
@@ -1049,35 +1077,51 @@ public class Main
                 }
                 case 4 ->
                 {
-                    System.out.println("Enter payer index:");
-                    int recPIdx = sc.nextInt();
-                    System.out.println("Enter amount in paise:");
+                    System.out.println("\n--- Schedule Recurring Payment ---");
+                    System.out.println("Available payers:");
+                    for (Payer p : payers)
+                    {
+                        System.out.println("ID: " + p.getId() + " Name: " + p.getName());
+                    }
+                    System.out.print("Enter payer ID: ");
+                    String recPid = sc.nextLine();
+                    Payer recPayer = null;
+                    for (Payer p : payers)
+                    {
+                        if (p.getId().equals(recPid))
+                        {
+                            recPayer = p;
+                            break;
+                        }
+                    }
+                    if (recPayer == null)
+                    {
+                        System.out.println("Invalid payer ID.");
+                        continue;
+                    }
+                    System.out.print("Enter amount in paise: ");
                     long recAmt = sc.nextLong();
-                    System.out.println("Enter interval in days:");
+                    System.out.print("Enter interval in days: ");
                     int interval = sc.nextInt();
                     sc.nextLine();
-                    if (recPIdx >= 0 && recPIdx < payers.size())
-                    {
-                        Payer recPayer = payers.get(recPIdx);
-                        facade.scheduleRecurring(recPayer, recAmt, "INR", interval);
-                        System.out.println("Recurring payment scheduled.");
-                    }
-                    else
-                    {
-                        System.out.println("Invalid payer index.");
-                    }
+                    facade.scheduleRecurring(recPayer, recAmt, "INR", interval);
+                    System.out.println("Recurring payment scheduled.");
                 }
                 case 5 ->
                 {
+                    System.out.println("\n--- Process Recurring Payments ---");
                     facade.processRecurring();
                     System.out.println("Recurring payments processed.");
                 }
                 case 6 ->
                 {
+                    System.out.println("\n--- Generate Report ---");
                     facade.generateReport();
+                    System.out.println("Report generated.");
                 }
                 case 7 ->
                 {
+                    System.out.println("\n--- Exit ---");
                     System.out.println("Exiting...");
                     sc.close();
                     return;
@@ -1089,5 +1133,27 @@ public class Main
             }
             System.out.println();
         }
+    }
+
+    public static void main(String[] args)
+    {
+        Scanner sc = new Scanner(System.in);
+
+        System.out.println("==================================================================");
+        System.out.println("   ██████╗  █████╗ ██╗   ██╗███╗   ███╗███████╗███╗   ██╗████████╗");
+        System.out.println("   ██╔══██╗██╔══██╗╚██╗ ██╔╝████╗ ████║██╔════╝████╗  ██║╚══██╔══╝");
+        System.out.println("   ██████╔╝███████║ ╚████╔╝ ██╔████╔██║█████╗  ██╔██╗ ██║   ██║   ");
+        System.out.println("   ██╔═══╝ ██╔══██║  ╚██╔╝  ██║╚██╔╝██║██╔══╝  ██║╚██╗██║   ██║   ");
+        System.out.println("   ██║     ██║  ██║   ██║   ██║ ╚═╝ ██║███████╗██║ ╚████║   ██║   ");
+        System.out.println("   ╚═╝     ╚═╝  ╚═╝   ╚═╝   ╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ");
+        System.out.println("==================================================================");
+        System.out.println("   Welcome to Payment Gateway System");
+        System.out.println("   Built with SOLID Principles in Java");
+        System.out.println("==================================================================");
+        System.out.println();
+
+        PaymentFacade facade = setupPayments();
+        List<Payer> payers = managePayers(sc);
+        runDemo(facade, payers, sc);
     }
 }
