@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 class Money
 {
-    private final long amount; // in paise
+    private final long amount;
     private final String currency;
 
     public Money(long amount, String currency)
@@ -75,13 +75,11 @@ class PayReq
 {
     private final Payer payer;
     private final Money amt;
-    private final Map<String, String> meta;
 
-    public PayReq(Payer p, Money amt, Map<String, String> meta)
+    public PayReq(Payer p, Money amt)
     {
         this.payer = p;
         this.amt = amt;
-        this.meta = meta == null ? Collections.emptyMap() : new HashMap<>(meta);
     }
 
     public Payer getPayer()
@@ -92,11 +90,6 @@ class PayReq
     public Money getAmt()
     {
         return amt;
-    }
-
-    public Map<String, String> getMeta()
-    {
-        return meta;
     }
 }
 
@@ -154,7 +147,6 @@ interface ITransactionStore
     List<Transaction> getAll();
 }
 
-// Transaction entity
 class Transaction
 {
     public enum Status
@@ -324,7 +316,6 @@ class FileTxStore implements ITransactionStore
     }
 }
 
-// Unique id generator
 class IdGen
 {
     private final AtomicLong c = new AtomicLong(1000);
@@ -686,7 +677,6 @@ class RecurringManager
         }
         catch (IOException e)
         {
-            // File not found, start empty
         }
         return recurring;
     }
@@ -725,8 +715,8 @@ class Scheduler implements IRecurringPayment
         {
             if (rt.getNextRun().before(now) || rt.getNextRun().equals(now))
             {
-                PayReq pr = new PayReq(rt.getPayer(), rt.getAmt(), Collections.emptyMap());
-                PayResp resp = svc.execute("card", pr); // assume card for recurring
+                PayReq pr = new PayReq(rt.getPayer(), rt.getAmt());
+                PayResp resp = svc.execute("card", pr);
                 if (resp.isOk())
                 {
                     rt.updateNextRun();
@@ -734,7 +724,6 @@ class Scheduler implements IRecurringPayment
                 }
                 else
                 {
-                    // remove if failed
                     recurring.remove(rt);
                     rm.saveRecurring(recurring, "recurring.txt");
                 }
@@ -810,14 +799,14 @@ class PaymentFacade
     public PayResp pay(String method, Payer payer, long amount, String currency)
     {
         Money m = new Money(amount, currency);
-        PayReq req = new PayReq(payer, m, Collections.emptyMap());
+        PayReq req = new PayReq(payer, m);
         return svc.execute(method, req);
     }
 
     public void scheduleRecurring(Payer payer, long amount, String currency, int interval)
     {
         Money m = new Money(amount, currency);
-        PayReq req = new PayReq(payer, m, Collections.emptyMap());
+        PayReq req = new PayReq(payer, m);
         sch.schedule(req, interval);
     }
 
@@ -876,13 +865,11 @@ class PayerManager
         }
         catch (IOException e)
         {
-            // File not found or error, start with empty list
         }
         return payers;
     }
 }
 
-// Demo main
 public class Main
 {
     private static PaymentFacade setupPayments()
@@ -904,8 +891,6 @@ public class Main
         Scheduler sch = new Scheduler(svc, idg);
         ReportGenerator rg = new ReportGenerator(store);
         PaymentFacade facade = new PaymentFacade(svc, sch, rg);
-
-        // Add NetBanking
         IPayment nb = new IPayment()
         {
             private final ITransactionStore s = store;
